@@ -1,11 +1,7 @@
 ## Interface: 11508
-## Title:     cfQuestXP
-## Notes:     Shows completed quest XP as an overlay on the experience bar
-## Author:    Cowfoot
-## Version:   1.0
-## SavedVariablesPerCharacter: cfQuestXPDB
+## Title: cfQuestXP
+## Notes: Shows completed quest XP as an overlay on the experience bar
+## Author: Cowfoot
+## Version: 2.0
 
-Init.lua
-GUI\_Factory.lua
-GUI\Settings.lua
-Features\QuestXP.lua
+cfQuestXP.lua
