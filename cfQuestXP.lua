@@ -4,6 +4,23 @@
 local overlay
 local difficultColor = QuestDifficultyColors["difficult"]
 
+local function CreateOverlay()
+    overlay = CreateFrame("StatusBar", nil, MainMenuExpBar)
+    overlay:SetAllPoints(MainMenuExpBar)
+    overlay:SetFrameLevel(MainMenuExpBar:GetFrameLevel())  -- equal level pairs with sublevel-1 to sit behind the fill
+    overlay:Hide()
+end
+
+-- Match the XP bar's texture + layer (one sublevel behind so the real fill wins), then
+-- re-apply our tint -- SetStatusBarTexture clears the color, so it must follow every time.
+local function SyncTexture()
+    local barTexture = MainMenuExpBar:GetStatusBarTexture()
+    overlay:SetStatusBarTexture(barTexture:GetTexture())
+    local drawLayer, sublevel = barTexture:GetDrawLayer()
+    overlay:GetStatusBarTexture():SetDrawLayer(drawLayer, sublevel - 1)
+    overlay:SetStatusBarColor(difficultColor.r, difficultColor.g, difficultColor.b)
+end
+
 -- Sum XP from quests that are complete (or have no objectives) but not yet turned in.
 local function GetCompletedQuestXP()
     local previousSelection = GetQuestLogSelection()
@@ -32,26 +49,10 @@ local function UpdateOverlay()
     overlay:Show()
 end
 
--- Match the XP bar's texture + layer (one sublevel behind so the real fill wins), then
--- re-apply our tint -- SetStatusBarTexture clears the color, so it must follow every time.
-local function SyncTexture()
-    local barTexture = MainMenuExpBar:GetStatusBarTexture()
-    overlay:SetStatusBarTexture(barTexture:GetTexture())
-    local drawLayer, sublevel = barTexture:GetDrawLayer()
-    overlay:GetStatusBarTexture():SetDrawLayer(drawLayer, sublevel - 1)
-    overlay:SetStatusBarColor(difficultColor.r, difficultColor.g, difficultColor.b)
-end
-
-overlay = CreateFrame("StatusBar", nil, MainMenuExpBar)
-overlay:SetAllPoints(MainMenuExpBar)
-overlay:SetFrameLevel(MainMenuExpBar:GetFrameLevel())  -- equal level pairs with sublevel-1 to sit behind the fill
-overlay:Hide()
-
--- texture: match the bar now, and keep matching it when anything repaints it
+CreateOverlay()
 SyncTexture()
 hooksecurefunc(MainMenuExpBar, "SetStatusBarTexture", SyncTexture)
 
--- events last
 overlay:SetScript("OnEvent", UpdateOverlay)
 overlay:RegisterEvent("QUEST_LOG_UPDATE")
 overlay:RegisterEvent("PLAYER_XP_UPDATE")
