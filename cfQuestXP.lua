@@ -3,6 +3,7 @@
 
 local overlay
 local difficultColor = QuestDifficultyColors["difficult"]
+local fillLayer, fillSublevel  -- the XP-bar fill's draw layer, captured once at load (see below)
 
 local function CreateOverlay()
     overlay = CreateFrame("StatusBar", nil, MainMenuExpBar)
@@ -11,13 +12,15 @@ local function CreateOverlay()
     overlay:Hide()
 end
 
--- Match the XP bar's texture + layer (one sublevel behind so the real fill wins), then
--- re-apply our tint -- SetStatusBarTexture clears the color, so it must follow every time.
+-- Match the XP bar's texture, pin our fill one sublevel behind the real fill, re-apply the tint
+-- (SetStatusBarTexture clears both the color and the draw layer, so both must follow every time).
+-- Use the layer captured at load, NOT a fresh read: this hook fires mid-way through cfFrames'
+-- SetStatusBarTexture -- after the swap resets the fill to its default (ARTWORK) but before
+-- cfFrames restores the real BACKGROUND layer -- so a read here returns ARTWORK and the overlay
+-- jumps above the real fill and bleeds over the bar.
 local function SyncTexture()
-    local barTexture = MainMenuExpBar:GetStatusBarTexture()
-    overlay:SetStatusBarTexture(barTexture:GetTexture())
-    local drawLayer, sublevel = barTexture:GetDrawLayer()
-    overlay:GetStatusBarTexture():SetDrawLayer(drawLayer, sublevel - 1)
+    overlay:SetStatusBarTexture(MainMenuExpBar:GetStatusBarTexture():GetTexture())
+    overlay:GetStatusBarTexture():SetDrawLayer(fillLayer, fillSublevel - 1)
     overlay:SetStatusBarColor(difficultColor.r, difficultColor.g, difficultColor.b)
 end
 
@@ -50,6 +53,9 @@ local function UpdateOverlay()
 end
 
 CreateOverlay()
+-- Capture the fill's real draw layer once, while it's settled (BACKGROUND); reading it inside
+-- the texture hook is unreliable (see SyncTexture).
+fillLayer, fillSublevel = MainMenuExpBar:GetStatusBarTexture():GetDrawLayer()
 SyncTexture()
 hooksecurefunc(MainMenuExpBar, "SetStatusBarTexture", SyncTexture)
 
