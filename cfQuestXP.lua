@@ -1,30 +1,24 @@
--- cfQuestXP: overlays the XP from completed-but-unturned quests onto the experience bar,
--- tinted with the "difficult" quest color, sitting just behind the real XP fill.
+-- cfQuestXP: shows the XP from completed-but-unturned quests as a "ghost" segment on the experience
+-- bar -- the gap just past your current XP -- tinted with the "difficult" quest color.
 
 local overlay
 local difficultColor = QuestDifficultyColors["difficult"]
-local fillLayer, fillSublevel  -- the XP-bar fill's draw layer, captured once at load (see below)
 
+-- The overlay is a texture on MainMenuExpBar ITSELF, in the EXACT slot the real fill occupies
+-- (BACKGROUND, sublevel -1), so it inherits everything the blue fill has: the same chrome draws over
+-- it (framed, no spill over the bottom edge) and it renders at the same brightness. It spans ONLY the
+-- gap past current XP, so it never overlaps the fill -- the only other texture at this slot -- which
+-- means no shared-sublevel draw-order race.
+--
+-- (Other slots failed: above the fill it sat over the bottom edge and spilled; at sublevel -2 it tied
+-- with another bar texture and the undefined draw order made it render dark or light at random.)
 local function CreateOverlay()
-    overlay = CreateFrame("StatusBar", nil, MainMenuExpBar)
-    overlay:SetAllPoints(MainMenuExpBar)
-    overlay:SetFrameLevel(MainMenuExpBar:GetFrameLevel())  -- equal level pairs with sublevel-1 to sit behind the fill
+    overlay = MainMenuExpBar:CreateTexture(nil, "BACKGROUND", nil, -1)
     overlay:Hide()
 end
 
--- Match the XP bar's texture, pin our fill one sublevel behind the real fill, re-apply the tint
--- (SetStatusBarTexture clears both the color and the draw layer, so both must follow every time).
--- Use the layer captured at load, NOT a fresh read: this hook fires mid-way through cfFrames'
--- SetStatusBarTexture -- after the swap resets the fill to its default (ARTWORK) but before
--- cfFrames restores the real BACKGROUND layer -- so a read here returns ARTWORK and the overlay
--- jumps above the real fill and bleeds over the bar.
-local function SyncTexture()
-    overlay:SetStatusBarTexture(MainMenuExpBar:GetStatusBarTexture():GetTexture())
-    overlay:GetStatusBarTexture():SetDrawLayer(fillLayer, fillSublevel - 1)
-    overlay:SetStatusBarColor(difficultColor.r, difficultColor.g, difficultColor.b)
-end
-
--- Sum XP from quests that are complete (or have no objectives) but not yet turned in.
+-- Match the bar's current texture (cfFrames or another retexturer may swap it live), re-tint, and
+-- reposition (SetTexture resets texcoord, so the slice must be re-applied via UpdateOverlay).
 local function GetCompletedQuestXP()
     local previousSelection = GetQuestLogSelection()
     local completedQuestXP = 0
@@ -47,19 +41,35 @@ local function UpdateOverlay()
     if maxXP == 0 then overlay:Hide() return end
     local completedQuestXP = GetCompletedQuestXP()
     if completedQuestXP == 0 then overlay:Hide() return end
-    overlay:SetMinMaxValues(0, maxXP)
-    overlay:SetValue(currentXP + math.min(completedQuestXP, maxXP - currentXP))
+
+    -- Span only the gap between current XP and the projected total, so it never overlaps the fill.
+    -- Anchor to the fill texture's right edge (not the frame) so it inherits the fill's exact start
+    -- and inset height -- anchoring to the frame made it full-height and spilled over the bottom edge.
+    local fillTexture = MainMenuExpBar:GetStatusBarTexture()
+    local barWidth = MainMenuExpBar:GetWidth()
+    local startFraction = currentXP / maxXP
+    local endFraction = math.min(currentXP + completedQuestXP, maxXP) / maxXP
+
+    overlay:ClearAllPoints()
+    overlay:SetPoint("TOPLEFT", fillTexture, "TOPRIGHT", 0, 0)
+    overlay:SetPoint("BOTTOMLEFT", fillTexture, "BOTTOMRIGHT", 0, 0)
+    overlay:SetWidth(math.max(1, (endFraction - startFraction) * barWidth))
+    overlay:SetTexCoord(startFraction, endFraction, 0, 1)
     overlay:Show()
 end
 
+local function SyncTexture()
+    overlay:SetTexture(MainMenuExpBar:GetStatusBarTexture():GetTexture())
+    overlay:SetVertexColor(difficultColor.r, difficultColor.g, difficultColor.b)
+    UpdateOverlay()
+end
+
 CreateOverlay()
--- Capture the fill's real draw layer once, while it's settled (BACKGROUND); reading it inside
--- the texture hook is unreliable (see SyncTexture).
-fillLayer, fillSublevel = MainMenuExpBar:GetStatusBarTexture():GetDrawLayer()
 SyncTexture()
 hooksecurefunc(MainMenuExpBar, "SetStatusBarTexture", SyncTexture)
 
-overlay:SetScript("OnEvent", UpdateOverlay)
-overlay:RegisterEvent("QUEST_LOG_UPDATE")
-overlay:RegisterEvent("PLAYER_XP_UPDATE")
-overlay:RegisterEvent("PLAYER_LEVEL_UP")
+local eventFrame = CreateFrame("Frame")
+eventFrame:SetScript("OnEvent", UpdateOverlay)
+eventFrame:RegisterEvent("QUEST_LOG_UPDATE")
+eventFrame:RegisterEvent("PLAYER_XP_UPDATE")
+eventFrame:RegisterEvent("PLAYER_LEVEL_UP")
