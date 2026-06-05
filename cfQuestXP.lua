@@ -2,7 +2,8 @@
 -- bar -- the gap just past your current XP -- tinted with the "difficult" quest color.
 
 local overlay
-local difficultColor = QuestDifficultyColors["difficult"]
+local difficultColor = QuestDifficultyColors["difficult"]          -- yellow: completed XP won't ding you
+local levelUpColor = QuestDifficultyColors["verydifficult"]        -- orange: completed XP would level you up
 
 -- The overlay is a texture on MainMenuExpBar ITSELF, in the EXACT slot the real fill occupies
 -- (BACKGROUND, sublevel -1), so it inherits everything the blue fill has: the same chrome draws over
@@ -49,6 +50,10 @@ local function UpdateOverlay()
     local barWidth = MainMenuExpBar:GetWidth()
     local startFraction = currentXP / maxXP
     local endFraction = math.min(currentXP + completedQuestXP, maxXP) / maxXP
+
+    -- If the completed-quest XP reaches 100%, turning those quests in would level you up: tint orange.
+    local color = (currentXP + completedQuestXP >= maxXP) and levelUpColor or difficultColor
+    overlay:SetVertexColor(color.r, color.g, color.b)
 
     overlay:ClearAllPoints()
     overlay:SetPoint("TOPLEFT", fillTexture, "TOPRIGHT", 0, 0)
